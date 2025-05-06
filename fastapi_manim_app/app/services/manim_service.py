@@ -5,13 +5,21 @@ import asyncio
 import shutil
 import uuid
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Dict
 
 import structlog
 
 from app.core.config import settings
+from app.models.animation import QualityOption
 
 logger = structlog.get_logger(__name__)
+
+# Mapping of quality options to Manim quality flags
+QUALITY_FLAG_MAP: Dict[str, str] = {
+    QualityOption.LOW: "-ql",     # Low quality, faster rendering
+    QualityOption.MEDIUM: "-qm",  # Medium quality
+    QualityOption.HIGH: "-qh"     # High quality, slower rendering
+}
 
 
 async def generate_manim_code_from_llm(query: str) -> str:
@@ -83,25 +91,29 @@ class GeneratedManimScene(Scene):
         """
 
 
-async def run_manim_script(script_path: Path, media_dir: Path) -> Tuple[bool, str]:
+async def run_manim_script(script_path: Path, media_dir: Path, quality: QualityOption = QualityOption.LOW) -> Tuple[bool, str]:
     """
     Execute the Manim script to generate an animation.
     
     Args:
         script_path: Path to the Python script containing Manim code
         media_dir: Directory where Manim should output its media files
+        quality: Quality level for the animation rendering
         
     Returns:
         Tuple[bool, str]: Success status and error message if any
     """
-    logger.info("Running Manim script", script_path=str(script_path), media_dir=str(media_dir))
+    logger.info("Running Manim script", script_path=str(script_path), media_dir=str(media_dir), quality=quality)
+    
+    # Get the appropriate quality flag based on the requested quality
+    quality_flag = QUALITY_FLAG_MAP.get(quality, "-ql")  # Default to low quality if unknown
     
     # Build the Manim command
     cmd = [
         "python", "-m", "manim",
         str(script_path),
         "GeneratedManimScene",
-        "-ql",  # Low quality for faster rendering
+        quality_flag,
         "--format", "mp4",
         "--media_dir", str(media_dir)
     ]
@@ -134,12 +146,13 @@ async def run_manim_script(script_path: Path, media_dir: Path) -> Tuple[bool, st
     return True, ""
 
 
-async def generate_animation_from_query(query: str) -> Tuple[bool, str, str]:
+async def generate_animation_from_query(query: str, quality: QualityOption = QualityOption.LOW) -> Tuple[bool, str, str]:
     """
     Generate a Manim animation based on a user query.
     
     Args:
         query: User's natural language query
+        quality: Quality level for the animation rendering
         
     Returns:
         Tuple[bool, str, str]: Success status, video URL (if successful), and error message (if failed)
@@ -163,8 +176,8 @@ async def generate_animation_from_query(query: str) -> Tuple[bool, str, str]:
         with open(script_path, "w") as f:
             f.write(manim_code)
         
-        # Run Manim to generate the animation
-        success, error_msg = await run_manim_script(script_path, media_dir)
+        # Run Manim to generate the animation with the specified quality
+        success, error_msg = await run_manim_script(script_path, media_dir, quality)
         
         if not success:
             return False, "", error_msg

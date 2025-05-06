@@ -69,9 +69,15 @@ Generate a Manim animation based on a natural language query.
 
 ```json
 {
-  "query": "animate a triangle morphing into a square"
+  "query": "animate a triangle morphing into a square",
+  "quality": "low" | "medium" | "high"
 }
 ```
+
+**Quality Settings**:
+- `low`: Faster rendering with lower resolution (default if not specified)
+- `medium`: Balanced rendering time and visual quality
+- `high`: Higher resolution and visual quality but longer rendering time
 
 - **Response**:
 
