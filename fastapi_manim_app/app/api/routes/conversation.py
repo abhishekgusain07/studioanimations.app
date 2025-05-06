@@ -4,14 +4,65 @@ Routes for managing conversations.
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.animation import ConversationResponse, ConversationWithAnimations, AnimationHistoryResponse
-from app.services.conversation_service import get_user_conversations, get_conversation_with_animations
+from app.models.animation import (
+    ConversationResponse, 
+    ConversationWithAnimations, 
+    AnimationHistoryResponse,
+    CreateConversationRequest
+)
+from app.services.conversation_service import (
+    get_user_conversations, 
+    get_conversation_with_animations,
+    create_conversation
+)
 
 router = APIRouter(prefix="/api", tags=["conversation"])
+
+
+@router.post("/conversations", response_model=ConversationResponse, status_code=status.HTTP_201_CREATED)
+async def start_new_conversation(
+    request: CreateConversationRequest,
+    db: AsyncSession = Depends(get_db)
+) -> ConversationResponse:
+    """
+    Create a new conversation.
+    
+    Args:
+        request: Request containing user_id, optional title and initial_prompt
+        db: Database session
+        
+    Returns:
+        ConversationResponse: The created conversation
+    """
+    try:
+        conversation = await create_conversation(
+            db=db,
+            user_id=request.user_id,
+            title=request.title,
+            initial_prompt=request.initial_prompt
+        )
+        
+        # Commit the transaction to save the conversation
+        await db.commit()
+        
+        return ConversationResponse(
+            id=conversation.id,
+            user_id=conversation.user_id,
+            title=conversation.title,
+            created_at=conversation.created_at,
+            updated_at=conversation.updated_at
+        )
+    except Exception as e:
+        # Roll back the transaction in case of errors
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create conversation: {str(e)}"
+        )
 
 
 @router.get("/conversations", response_model=list[ConversationResponse])

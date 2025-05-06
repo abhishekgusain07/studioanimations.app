@@ -183,22 +183,59 @@ Check the health of the application.
 }
 ```
 
+### Create Conversation
+
+Create a new conversation.
+
+- **URL**: `/api/conversations`
+- **Method**: `POST`
+- **Request Body**:
+
+```json
+{
+  "user_id": "uuid-of-the-user",
+  "title": "Optional conversation title",
+  "initial_prompt": "Optional prompt to generate title from"
+}
+```
+
+- **Response**:
+
+```json
+{
+  "id": "uuid-of-the-conversation",
+  "user_id": "uuid-of-the-user",
+  "title": "Conversation Title",
+  "created_at": "2023-10-30T12:34:56Z",
+  "updated_at": "2023-10-30T12:34:56Z"
+}
+```
+
 ## Conversation-based Workflow
 
 The application supports a conversation-based workflow for animation generation:
 
-1. Generate an initial animation with a new conversation:
-   - Send a request to `/api/generate-animation` without a `conversation_id`
-   - The system will create a new conversation for you
+1. **Start a new conversation**:
+   - Send a POST request to `/api/conversations` with:
+     ```json
+     {
+       "user_id": "uuid-of-the-user",
+       "initial_prompt": "Optional prompt to generate title from"
+     }
+     ```
+   - Or simply send an animation request without a conversation ID - the system will create a new conversation automatically
 
-2. Iterate on an animation within the same conversation:
-   - Send another request with the same `conversation_id`
-   - Optionally include `previous_code` to refine an existing animation
-   - The system will track the new animation as part of the same conversation
+2. **Generate an animation in an existing conversation**:
+   - Send a request to `/api/generate-animation` with a `conversation_id`
+   - The system will add the new animation to the existing conversation
 
-3. View your conversation history:
-   - Use `/api/conversations` to list all your conversations
-   - Use `/api/conversations/{conversation_id}` to view all animations in a conversation
+3. **Iterate on an animation**:
+   - Include `previous_code` in your request to refine an existing animation
+   - The system will track the new animation as part of the same conversation with an incremented version number
+
+4. **View your conversation history**:
+   - Use `/api/conversations?user_id=your-user-id` to list all your conversations
+   - Use `/api/conversations/{conversation_id}?user_id=your-user-id` to view all animations in a conversation
 
 This approach enables iterative refinement of animations while maintaining context.
 

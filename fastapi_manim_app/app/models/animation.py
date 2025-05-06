@@ -42,6 +42,13 @@ class ConversationBase(BaseModel):
     title: Optional[str] = None
 
 
+class CreateConversationRequest(BaseModel):
+    """Request model for creating a new conversation."""
+    user_id: UUID
+    title: Optional[str] = None
+    initial_prompt: Optional[str] = None
+
+
 class ConversationCreate(ConversationBase):
     """Model for creating a new conversation."""
     pass

@@ -13,6 +13,67 @@ from app.models.db_models import Conversation, Animation
 from app.models.animation import QualityOption
 
 
+async def create_conversation(
+    db: AsyncSession,
+    user_id: UUID,
+    title: Optional[str] = None,
+    initial_prompt: Optional[str] = None
+) -> Conversation:
+    """
+    Create a new conversation.
+    
+    Args:
+        db: Database session
+        user_id: UUID of the user who owns the conversation
+        title: Optional title for the conversation
+        initial_prompt: Optional first prompt to generate a title from
+        
+    Returns:
+        Conversation: The created conversation
+    """
+    # Generate a title if none is provided
+    if not title and initial_prompt:
+        title = generate_conversation_title(initial_prompt)
+    elif not title:
+        title = f"Conversation {uuid.uuid4().hex[:8]}"
+    
+    # Create the conversation
+    conversation = Conversation(
+        user_id=user_id,
+        title=title
+    )
+    db.add(conversation)
+    await db.flush()
+    
+    return conversation
+
+
+def generate_conversation_title(prompt: str) -> str:
+    """
+    Generate a conversation title from a prompt.
+    
+    In a production application, this could use an LLM to generate a more meaningful title.
+    
+    Args:
+        prompt: The initial prompt
+        
+    Returns:
+        str: A generated title
+    """
+    # Simple implementation: use the first few words of the prompt
+    words = prompt.strip().split()
+    if len(words) <= 5:
+        title = prompt.strip()
+    else:
+        title = " ".join(words[:5]) + "..."
+    
+    # Capitalize the first letter of the title
+    if title:
+        title = title[0].upper() + title[1:]
+    
+    return title
+
+
 async def get_or_create_conversation(
     db: AsyncSession, 
     conversation_id: Optional[UUID], 

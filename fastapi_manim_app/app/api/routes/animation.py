@@ -3,14 +3,14 @@ Routes for generating Manim animations.
 """
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.models.animation import AnimationRequest, AnimationResponse, QualityOption, AnimationHistoryResponse
 from app.services.manim_service import generate_animation_from_query
-from app.services.conversation_service import get_conversation_with_animations
+from app.services.conversation_service import get_conversation_with_animations, create_conversation
 
 router = APIRouter(prefix="/api", tags=["animation"])
 
@@ -62,37 +62,65 @@ async def generate_animation(
     Raises:
         HTTPException: If animation generation fails
     """
-    success, video_url, error_msg, animation_id, conversation_id = await generate_animation_from_query(
-        query=request.query,
-        quality=request.quality,
-        conversation_id=request.conversation_id,
-        user_id=request.user_id,
-        previous_code=request.previous_code,
-        db=db
-    )
-    
-    if not success:
-        raise HTTPException(
-            status_code=500,
-            detail=error_msg or "Failed to generate animation"
+    try:
+        # Create a new conversation if one isn't provided
+        if not request.conversation_id:
+            conversation = await create_conversation(
+                db=db,
+                user_id=request.user_id,
+                initial_prompt=request.query
+            )
+            await db.flush()
+            conversation_id = conversation.id
+        else:
+            conversation_id = request.conversation_id
+
+        # Generate the animation
+        success, video_url, error_msg, animation_id, conversation_id = await generate_animation_from_query(
+            query=request.query,
+            quality=request.quality,
+            conversation_id=conversation_id,
+            user_id=request.user_id,
+            previous_code=request.previous_code,
+            db=db
         )
-    
-    # Get the version of the created animation
-    conversation_data = await get_conversation_with_animations(db, conversation_id, request.user_id)
-    animation = next((a for a in conversation_data["animations"] if str(a["id"]) == str(animation_id)), None)
-    version = animation["version"] if animation else 1
-    created_at = animation["created_at"] if animation else None
-    
-    return AnimationResponse(
-        id=animation_id,
-        success=True,
-        video_url=video_url,
-        message="Animation generated successfully",
-        conversation_id=conversation_id,
-        user_id=request.user_id,
-        version=version,
-        created_at=created_at
-    )
+        
+        # Commit the transaction
+        await db.commit()
+        
+        if not success:
+            await db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_msg or "Failed to generate animation"
+            )
+        
+        # Get the version of the created animation
+        conversation_data = await get_conversation_with_animations(db, conversation_id, request.user_id)
+        animation = next((a for a in conversation_data["animations"] if str(a["id"]) == str(animation_id)), None)
+        version = animation["version"] if animation else 1
+        created_at = animation["created_at"] if animation else None
+        
+        return AnimationResponse(
+            id=animation_id,
+            success=True,
+            video_url=video_url,
+            message="Animation generated successfully",
+            conversation_id=conversation_id,
+            user_id=request.user_id,
+            version=version,
+            created_at=created_at
+        )
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Roll back the transaction in case of errors
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error generating animation: {str(e)}"
+        )
 
 
 @router.get("/animations", response_model=AnimationHistoryResponse)
