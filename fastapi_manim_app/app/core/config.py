@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     SERVED_VIDEOS_PATH_PREFIX: str = "/manim_videos"
 
     # Database settings
+    DATABASE_URL: Optional[str] = None
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: str = "5432"
     POSTGRES_USER: str = "postgres"
@@ -49,7 +50,9 @@ class Settings(BaseSettings):
     @computed_field
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
-        """Assemble database connection string from components."""
+        """Assemble database connection string from components or use DATABASE_URL if provided."""
+        if self.DATABASE_URL:
+            return self.DATABASE_URL
         return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
     
     # Test database - used for pytest
