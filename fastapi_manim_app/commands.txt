@@ -1,0 +1,28 @@
+# Create and activate virtual environment with uv
+uv venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+uv pip install -e ".[dev]"
+
+# Copy the example env file
+cp .env.example .env
+
+# Run the application with hot reload
+uvicorn app.main:app --reload
+
+# Run tests
+pytest
+
+# Run tests with coverage report
+pytest --cov=app tests/
+
+# Format code
+black .
+isort .
+
+# Run linting
+ruff .
+
+# Run type checking
+mypy .
