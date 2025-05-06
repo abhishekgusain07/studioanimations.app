@@ -1,0 +1,66 @@
+"""
+Database models for the application.
+"""
+import uuid
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import (
+    Column, 
+    String, 
+    Text, 
+    DateTime, 
+    ForeignKey, 
+    Boolean, 
+    Integer,
+    func
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import relationship
+
+from app.core.database import Base
+
+
+class Conversation(Base):
+    """Model for tracking conversations."""
+    __tablename__ = "conversations"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    title = Column(String(255), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relationships
+    animations = relationship("Animation", back_populates="conversation", cascade="all, delete-orphan")
+    
+    def __repr__(self) -> str:
+        return f"<Conversation(id={self.id}, user_id={self.user_id}, title={self.title})>"
+
+
+class Animation(Base):
+    """Model for storing animation data."""
+    __tablename__ = "animations"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    conversation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True
+    )
+    user_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    query = Column(Text, nullable=False)
+    generated_code = Column(Text, nullable=False)
+    video_url = Column(String(255), nullable=False)
+    version = Column(Integer, default=1)
+    quality = Column(String(10), nullable=False, default="low")
+    success = Column(Boolean, default=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    conversation = relationship("Conversation", back_populates="animations")
+    
+    def __repr__(self) -> str:
+        return f"<Animation(id={self.id}, conversation_id={self.conversation_id}, version={self.version})>" 

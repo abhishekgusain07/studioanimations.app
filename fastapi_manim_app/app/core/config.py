@@ -3,9 +3,9 @@ Application configuration settings loaded from environment variables.
 """
 import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-from pydantic import AnyHttpUrl, field_validator
+from pydantic import AnyHttpUrl, field_validator, PostgresDsn, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -37,6 +37,29 @@ class Settings(BaseSettings):
     TEMP_BASE_DIR: Path = Path("temp_manim_jobs")
     STATIC_VIDEOS_DIR: Path = Path("temp_manim_jobs/public_videos")
     SERVED_VIDEOS_PATH_PREFIX: str = "/manim_videos"
+
+    # Database settings
+    POSTGRES_HOST: str = "localhost"
+    POSTGRES_PORT: str = "5432"
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
+    POSTGRES_DB: str = "manim_app"
+    DATABASE_ECHO: bool = False
+    
+    @computed_field
+    @property
+    def SQLALCHEMY_DATABASE_URI(self) -> str:
+        """Assemble database connection string from components."""
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+    
+    # Test database - used for pytest
+    TEST_POSTGRES_DB: str = "test_manim_app"
+    
+    @computed_field
+    @property
+    def TEST_SQLALCHEMY_DATABASE_URI(self) -> str:
+        """Assemble test database connection string."""
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.TEST_POSTGRES_DB}"
 
     @field_validator("ALLOWED_ORIGINS", mode="before")
     @classmethod

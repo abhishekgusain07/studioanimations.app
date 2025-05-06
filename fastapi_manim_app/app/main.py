@@ -5,7 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.api.routes import animation, health
+from app.api.routes import animation, health, conversation
 from app.core.config import settings
 from app.core.logging import configure_logging
 
@@ -35,6 +35,7 @@ def create_application() -> FastAPI:
     # Include routers
     application.include_router(health.router)
     application.include_router(animation.router)
+    application.include_router(conversation.router)
     
     # Mount static directory for serving generated videos
     application.mount(

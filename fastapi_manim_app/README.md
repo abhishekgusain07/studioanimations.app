@@ -9,12 +9,16 @@ A FastAPI application that generates Manim animations based on natural language 
 - Asynchronous processing of animation generation
 - Automatic file cleanup and management
 - Static file serving for generated videos
+- **Conversation Tracking**: Keep track of animations in the context of ongoing conversations
+- **Iterative Refinement**: Build on previous animations within conversations
+- **User-based Storage**: Access your animation history organized by conversation
 
 ## Prerequisites
 
 - Python 3.9 or higher
 - [FFmpeg](https://ffmpeg.org/download.html) (required by Manim)
 - [LaTeX](https://www.latex-project.org/get/) (required by Manim for text rendering)
+- PostgreSQL 13 or higher
 
 ## Installation
 
@@ -38,6 +42,24 @@ uv pip install -e ".[dev]"
 
 ```bash
 cp .env.example .env
+```
+
+5. **Set up a PostgreSQL database**
+
+Create a PostgreSQL database and update the `.env` file with your database credentials:
+
+```
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=your_username
+POSTGRES_PASSWORD=your_password
+POSTGRES_DB=manim_app
+```
+
+6. **Run migrations**
+
+```bash
+alembic upgrade head
 ```
 
 ## Running the Application
@@ -70,7 +92,10 @@ Generate a Manim animation based on a natural language query.
 ```json
 {
   "query": "animate a triangle morphing into a square",
-  "quality": "low" | "medium" | "high"
+  "quality": "low" | "medium" | "high",
+  "conversation_id": "optional-uuid-for-conversation",
+  "user_id": "uuid-of-the-user",
+  "previous_code": "optional-previous-manim-code"
 }
 ```
 
@@ -83,9 +108,63 @@ Generate a Manim animation based on a natural language query.
 
 ```json
 {
+  "id": "uuid-of-the-animation",
   "success": true,
   "video_url": "/manim_videos/123e4567-e89b-12d3-a456-426614174000_GeneratedManimScene.mp4",
-  "message": "Animation generated successfully"
+  "message": "Animation generated successfully",
+  "conversation_id": "uuid-of-the-conversation",
+  "user_id": "uuid-of-the-user",
+  "version": 1,
+  "created_at": "2023-10-30T12:34:56Z"
+}
+```
+
+### List Conversations
+
+Get all conversations for a user.
+
+- **URL**: `/api/conversations?user_id=uuid-of-the-user`
+- **Method**: `GET`
+- **Response**:
+
+```json
+[
+  {
+    "id": "uuid-of-the-conversation",
+    "user_id": "uuid-of-the-user",
+    "title": "Conversation Title",
+    "created_at": "2023-10-30T12:34:56Z",
+    "updated_at": "2023-10-30T12:34:56Z"
+  }
+]
+```
+
+### Get Conversation with Animations
+
+Get a conversation with all its animations.
+
+- **URL**: `/api/conversations/{conversation_id}?user_id=uuid-of-the-user`
+- **Method**: `GET`
+- **Response**:
+
+```json
+{
+  "id": "uuid-of-the-conversation",
+  "user_id": "uuid-of-the-user",
+  "title": "Conversation Title",
+  "created_at": "2023-10-30T12:34:56Z",
+  "updated_at": "2023-10-30T12:34:56Z",
+  "animations": [
+    {
+      "id": "uuid-of-the-animation",
+      "query": "animate a triangle morphing into a square",
+      "video_url": "/manim_videos/123e4567-e89b-12d3-a456-426614174000_GeneratedManimScene.mp4",
+      "version": 1,
+      "quality": "low",
+      "success": true,
+      "created_at": "2023-10-30T12:34:56Z"
+    }
+  ]
 }
 ```
 
@@ -103,6 +182,25 @@ Check the health of the application.
   "version": "0.1.0"
 }
 ```
+
+## Conversation-based Workflow
+
+The application supports a conversation-based workflow for animation generation:
+
+1. Generate an initial animation with a new conversation:
+   - Send a request to `/api/generate-animation` without a `conversation_id`
+   - The system will create a new conversation for you
+
+2. Iterate on an animation within the same conversation:
+   - Send another request with the same `conversation_id`
+   - Optionally include `previous_code` to refine an existing animation
+   - The system will track the new animation as part of the same conversation
+
+3. View your conversation history:
+   - Use `/api/conversations` to list all your conversations
+   - Use `/api/conversations/{conversation_id}` to view all animations in a conversation
+
+This approach enables iterative refinement of animations while maintaining context.
 
 ## Development
 
@@ -135,4 +233,18 @@ ruff .
 
 ```bash
 mypy .
+```
+
+### Run Database Migrations
+
+Create a new migration:
+
+```bash
+alembic revision --autogenerate -m "description"
+```
+
+Apply migrations:
+
+```bash
+alembic upgrade head
 ```

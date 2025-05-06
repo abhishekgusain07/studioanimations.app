@@ -26,3 +26,13 @@ ruff .
 
 # Run type checking
 mypy .
+
+
+
+/////////////////////
+alembic upgrade head
+This command will apply all pending migrations (in this case, your initial migration that creates the conversations and animations tables).
+
+
+If you need to revert the migration later, you can run:
+alembic downgrade -1
