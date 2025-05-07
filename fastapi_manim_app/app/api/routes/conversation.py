@@ -24,7 +24,6 @@ from app.services.conversation_service import (
     rename_conversation,
     delete_conversation
 )
-from app.services.user_service import get_current_user
 
 router = APIRouter(prefix="/api", tags=["conversation"])
 
