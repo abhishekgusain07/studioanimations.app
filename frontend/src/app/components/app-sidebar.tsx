@@ -190,12 +190,12 @@ export function AppSidebar() {
                       {filteredToday.map((conv) => (
                         <SidebarMenuItem key={conv.id}>
                           <SidebarMenuButton 
-                            className="w-full justify-start group"
+                            className="w-full justify-start group relative"
                             onClick={() => router.push(`/chat/${conv.id}`)}
                           >
-                            <MessageSquare className="h-4 w-4 mr-2 text-muted-foreground" />
-                            <span className="truncate">{conv.title || "New conversation"}</span>
-                            <div className="hidden ml-auto group-hover:flex gap-0.5">
+                            <MessageSquare className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
+                            <span className="flex-grow truncate">{conv.title || "New conversation"}</span>
+                            <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center gap-0.5 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-transparent group-hover:bg-muted/80">
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
@@ -237,12 +237,12 @@ export function AppSidebar() {
                       {filteredOlder.map((conv) => (
                         <SidebarMenuItem key={conv.id}>
                           <SidebarMenuButton 
-                            className="w-full justify-start group"
+                            className="w-full justify-start group relative"
                             onClick={() => router.push(`/chat/${conv.id}`)}
                           >
-                            <MessageSquare className="h-4 w-4 mr-2 text-muted-foreground" />
-                            <span className="truncate">{conv.title || "New conversation"}</span>
-                            <div className="hidden ml-auto group-hover:flex gap-0.5">
+                            <MessageSquare className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
+                            <span className="flex-grow truncate">{conv.title || "New conversation"}</span>
+                            <div className="absolute right-1 top-1/2 transform -translate-y-1/2 flex items-center gap-0.5 p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-transparent group-hover:bg-muted/80">
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
@@ -274,7 +274,7 @@ export function AppSidebar() {
                 </SidebarGroup>
               )}
               
-              {filteredToday.length === 0 && filteredOlder.length === 0 && (
+            {filteredToday.length === 0 && filteredOlder.length === 0 && (
                 <div className="px-3 py-10 text-center text-muted-foreground">
                   <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No conversations found</p>
