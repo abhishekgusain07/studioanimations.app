@@ -5,7 +5,7 @@ import uuid
 from typing import List, Optional, Tuple, Dict, Any
 from uuid import UUID
 
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -315,4 +315,86 @@ async def get_conversation_sidebar_data(
             animation_count=count
         )
         for conv, count in conversations
-    ] 
+    ]
+
+
+async def rename_conversation(
+    db: AsyncSession,
+    conversation_id: UUID,
+    user_id: UUID,
+    new_title: str
+) -> Optional[Conversation]:
+    """
+    Rename a conversation.
+    
+    Args:
+        db: Database session
+        conversation_id: ID of the conversation to rename
+        user_id: ID of the user who owns the conversation
+        new_title: New title for the conversation
+        
+    Returns:
+        Updated conversation or None if not found or not owned by the user
+    """
+    # Find the conversation
+    query = select(Conversation).where(
+        Conversation.id == conversation_id,
+        Conversation.user_id == user_id
+    )
+    result = await db.execute(query)
+    conversation = result.scalar_one_or_none()
+    
+    if not conversation:
+        return None
+    
+    # Update the title
+    conversation.title = new_title
+    conversation.updated_at = func.now()
+    
+    db.add(conversation)
+    await db.flush()
+    
+    return conversation
+
+
+async def delete_conversation(
+    db: AsyncSession,
+    conversation_id: UUID,
+    user_id: UUID
+) -> bool:
+    """
+    Delete a conversation and all its animations.
+    
+    Args:
+        db: Database session
+        conversation_id: ID of the conversation to delete
+        user_id: ID of the user who owns the conversation
+        
+    Returns:
+        True if deleted successfully, False if not found or not owned by the user
+    """
+    # Find the conversation
+    query = select(Conversation).where(
+        Conversation.id == conversation_id,
+        Conversation.user_id == user_id
+    )
+    result = await db.execute(query)
+    conversation = result.scalar_one_or_none()
+    
+    if not conversation:
+        return False
+    
+    # Delete all animations in the conversation
+    delete_animations = delete(Animation).where(
+        Animation.conversation_id == conversation_id
+    )
+    await db.execute(delete_animations)
+    
+    # Delete the conversation
+    delete_conv = delete(Conversation).where(
+        Conversation.id == conversation_id,
+        Conversation.user_id == user_id
+    )
+    await db.execute(delete_conv)
+    
+    return True 

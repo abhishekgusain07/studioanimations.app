@@ -89,4 +89,10 @@ class ConversationSidebarResponse(BaseModel):
     title: str
     last_active: datetime
     preview: Optional[str] = None
-    animation_count: int = 0 
+    animation_count: int = 0
+
+
+class RenameConversationRequest(BaseModel):
+    """Request model for renaming a conversation."""
+    user_id: UUID
+    new_title: str 

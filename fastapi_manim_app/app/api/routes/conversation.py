@@ -13,13 +13,16 @@ from app.models.animation import (
     ConversationWithAnimations, 
     AnimationHistoryResponse,
     CreateConversationRequest,
-    ConversationSidebarResponse
+    ConversationSidebarResponse,
+    RenameConversationRequest
 )
 from app.services.conversation_service import (
     get_user_conversations, 
     get_conversation_with_animations,
     create_conversation,
-    get_conversation_sidebar_data
+    get_conversation_sidebar_data,
+    rename_conversation,
+    delete_conversation
 )
 from app.services.user_service import get_current_user
 
@@ -146,3 +149,100 @@ async def get_conversation_sidebar(
         skip=skip,
         limit=limit
     ) 
+
+
+@router.patch("/conversations/{conversation_id}/rename", response_model=ConversationResponse)
+async def rename_conversation_route(
+    conversation_id: UUID,
+    request: RenameConversationRequest,
+    db: AsyncSession = Depends(get_db)
+) -> ConversationResponse:
+    """
+    Rename a conversation.
+    
+    Args:
+        conversation_id: ID of the conversation to rename
+        request: Request containing user_id and new_title
+        db: Database session
+        
+    Returns:
+        Updated conversation
+        
+    Raises:
+        HTTPException: If the conversation is not found or not owned by the user
+    """
+    try:
+        conversation = await rename_conversation(
+            db=db,
+            conversation_id=conversation_id,
+            user_id=request.user_id,
+            new_title=request.new_title
+        )
+        
+        if not conversation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Conversation with ID {conversation_id} not found or not owned by the user"
+            )
+        
+        # Commit the transaction
+        await db.commit()
+        
+        return ConversationResponse(
+            id=conversation.id,
+            user_id=conversation.user_id,
+            title=conversation.title,
+            created_at=conversation.created_at,
+            updated_at=conversation.updated_at
+        )
+    except Exception as e:
+        # Roll back the transaction in case of errors
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to rename conversation: {str(e)}"
+        )
+
+
+@router.delete("/conversations/{conversation_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_conversation_route(
+    conversation_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete a conversation and all its animations.
+    
+    Args:
+        conversation_id: ID of the conversation to delete
+        user_id: ID of the user who owns the conversation
+        db: Database session
+        
+    Raises:
+        HTTPException: If the conversation is not found or not owned by the user
+    """
+    try:
+        success = await delete_conversation(
+            db=db,
+            conversation_id=conversation_id,
+            user_id=user_id
+        )
+        
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Conversation with ID {conversation_id} not found or not owned by the user"
+            )
+        
+        # Commit the transaction
+        await db.commit()
+    except HTTPException:
+        # Re-raise HTTP exceptions as-is
+        raise
+    except Exception as e:
+        # Roll back the transaction in case of errors
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete conversation: {str(e)}"
+        ) 

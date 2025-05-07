@@ -237,6 +237,43 @@ Get optimized conversation data for the sidebar display, including minimal data 
 
 The results are automatically sorted by most recent activity first.
 
+### Rename Conversation
+
+Rename an existing conversation.
+
+- **URL**: `/api/conversations/{conversation_id}/rename`
+- **Method**: `PATCH`
+- **Request Body**:
+
+```json
+{
+  "user_id": "uuid-of-the-user",
+  "new_title": "New Conversation Title"
+}
+```
+
+- **Response**:
+
+```json
+{
+  "id": "uuid-of-the-conversation",
+  "user_id": "uuid-of-the-user",
+  "title": "New Conversation Title",
+  "created_at": "2023-10-30T12:34:56Z",
+  "updated_at": "2023-10-31T09:45:23Z"
+}
+```
+
+### Delete Conversation
+
+Delete a conversation and all its animations.
+
+- **URL**: `/api/conversations/{conversation_id}?user_id=uuid-of-the-user`
+- **Method**: `DELETE`
+- **Query Parameters**:
+  - `user_id`: UUID of the user who owns the conversation
+- **Response**: No content (204)
+
 ## Conversation-based Workflow
 
 The application supports a conversation-based workflow for animation generation:
