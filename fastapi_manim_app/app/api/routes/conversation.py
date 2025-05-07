@@ -1,7 +1,7 @@
 """
 Routes for managing conversations.
 """
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Depends, Query, status
@@ -12,13 +12,16 @@ from app.models.animation import (
     ConversationResponse, 
     ConversationWithAnimations, 
     AnimationHistoryResponse,
-    CreateConversationRequest
+    CreateConversationRequest,
+    ConversationSidebarResponse
 )
 from app.services.conversation_service import (
     get_user_conversations, 
     get_conversation_with_animations,
-    create_conversation
+    create_conversation,
+    get_conversation_sidebar_data
 )
+from app.services.user_service import get_current_user
 
 router = APIRouter(prefix="/api", tags=["conversation"])
 
@@ -116,3 +119,30 @@ async def get_conversation(
         )
     
     return conversation 
+
+
+@router.get("/sidebar", response_model=List[ConversationSidebarResponse])
+async def get_conversation_sidebar(
+    user_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: AsyncSession = Depends(get_db)
+) -> List[ConversationSidebarResponse]:
+    """
+    Get optimized conversation data for sidebar display.
+    
+    Args:
+        current_user: The authenticated user
+        skip: Number of conversations to skip (pagination)
+        limit: Maximum number of conversations to return (1-100)
+        db: Database session
+        
+    Returns:
+        List of conversation sidebar data
+    """
+    return await get_conversation_sidebar_data(
+        db=db,
+        user_id=user_id,
+        skip=skip,
+        limit=limit
+    ) 

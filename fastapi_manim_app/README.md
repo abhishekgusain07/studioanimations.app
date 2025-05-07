@@ -211,6 +211,32 @@ Create a new conversation.
 }
 ```
 
+### Get Conversation Sidebar Data
+
+Get optimized conversation data for the sidebar display, including minimal data such as id, title, last active time, and animation count.
+
+- **URL**: `/api/sidebar?user_id=uuid-of-the-user&skip=0&limit=50`
+- **Method**: `GET`
+- **Query Parameters**:
+  - `user_id`: UUID of the user
+  - `skip`: Number of conversations to skip (for pagination, default: 0)
+  - `limit`: Maximum number of conversations to return (default: 50, max: 100)
+- **Response**:
+
+```json
+[
+  {
+    "id": "uuid-of-the-conversation",
+    "title": "Conversation Title",
+    "last_active": "2023-10-30T12:34:56Z",
+    "preview": "Optional preview of the conversation",
+    "animation_count": 3
+  }
+]
+```
+
+The results are automatically sorted by most recent activity first.
+
 ## Conversation-based Workflow
 
 The application supports a conversation-based workflow for animation generation:

@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.db_models import Conversation, Animation
-from app.models.animation import QualityOption
+from app.models.animation import ConversationSidebarResponse, QualityOption
 
 
 async def create_conversation(
@@ -267,4 +267,52 @@ async def get_user_conversations(
             "updated_at": conv.updated_at
         }
         for conv in conversations
-    ], total_count 
+    ], total_count
+
+
+async def get_conversation_sidebar_data(
+    db: AsyncSession,
+    user_id: UUID,
+    skip: int = 0,
+    limit: int = 50
+) -> List[ConversationSidebarResponse]:
+    """
+    Get optimized conversation data for sidebar display.
+    
+    Args:
+        db: Database session
+        user_id: The ID of the user
+        skip: Number of conversations to skip (pagination)
+        limit: Maximum number of conversations to return
+        
+    Returns:
+        List of conversation sidebar data
+    """
+    # Query conversations with animation count
+    query = select(
+        Conversation,
+        func.count(Animation.id).label('animation_count')
+    ).outerjoin(
+        Animation,
+        Animation.conversation_id == Conversation.id
+    ).where(
+        Conversation.user_id == user_id
+    ).group_by(
+        Conversation.id
+    ).order_by(
+        Conversation.updated_at.desc()
+    ).offset(skip).limit(limit)
+    
+    result = await db.execute(query)
+    conversations = result.all()
+    
+    return [
+        ConversationSidebarResponse(
+            id=conv.id,
+            title=conv.title,
+            last_active=conv.updated_at,
+            preview=conv.preview,
+            animation_count=count
+        )
+        for conv, count in conversations
+    ] 

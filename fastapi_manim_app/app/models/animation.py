@@ -80,4 +80,13 @@ class ConversationWithAnimations(ConversationResponse):
 class AnimationHistoryResponse(BaseModel):
     """Response model for animation history."""
     animations: List[AnimationInConversation]
-    count: int 
+    count: int
+
+
+class ConversationSidebarResponse(BaseModel):
+    """Response model for conversation sidebar data."""
+    id: UUID
+    title: str
+    last_active: datetime
+    preview: Optional[str] = None
+    animation_count: int = 0 
