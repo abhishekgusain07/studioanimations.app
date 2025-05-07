@@ -25,6 +25,7 @@ import { useRouter } from "next/navigation"
 import { format } from "date-fns"
 import { Skeleton } from "@/components/ui/skeleton"
 import { RenameConversationDialog } from "./rename-conversation-dialog"
+import { DeleteConversationDialog } from "./delete-conversation-dialog"
 
 export function AppSidebar() {
   const router = useRouter()
@@ -39,6 +40,18 @@ export function AppSidebar() {
     conversationId: "",
     title: "",
   })
+  
+  const [deleteDialog, setDeleteDialog] = useState<{
+    isOpen: boolean;
+    conversationId: string;
+    title: string;
+  }>({
+    isOpen: false,
+    conversationId: "",
+    title: "",
+  })
+  
+  const [isDeleting, setIsDeleting] = useState(false)
   
   const { 
     conversations, 
@@ -71,6 +84,37 @@ export function AppSidebar() {
       conversationId: "",
       title: ""
     })
+  }
+  
+  const openDeleteDialog = (id: string, title: string) => {
+    setDeleteDialog({
+      isOpen: true,
+      conversationId: id,
+      title: title || "New conversation"
+    })
+  }
+  
+  const closeDeleteDialog = () => {
+    setDeleteDialog({
+      isOpen: false,
+      conversationId: "",
+      title: ""
+    })
+  }
+  
+  const handleDeleteConversation = async () => {
+    if (!deleteDialog.conversationId) return
+    
+    setIsDeleting(true)
+    
+    try {
+      await deleteConversation(deleteDialog.conversationId)
+      closeDeleteDialog()
+    } catch (error) {
+      console.error("Failed to delete conversation:", error)
+    } finally {
+      setIsDeleting(false)
+    }
   }
   
   // Group conversations by date
@@ -169,7 +213,7 @@ export function AppSidebar() {
                                 className="h-6 w-6 text-destructive opacity-70 hover:opacity-100"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  deleteConversation(conv.id)
+                                  openDeleteDialog(conv.id, conv.title)
                                 }}
                               >
                                 <Trash2 className="h-3 w-3" />
@@ -216,7 +260,7 @@ export function AppSidebar() {
                                 className="h-6 w-6 text-destructive opacity-70 hover:opacity-100"
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  deleteConversation(conv.id)
+                                  openDeleteDialog(conv.id, conv.title)
                                 }}
                               >
                                 <Trash2 className="h-3 w-3" />
@@ -263,6 +307,15 @@ export function AppSidebar() {
         onClose={closeRenameDialog}
         conversationId={renameDialog.conversationId}
         currentTitle={renameDialog.title}
+      />
+      
+      {/* Delete dialog */}
+      <DeleteConversationDialog
+        isOpen={deleteDialog.isOpen}
+        onClose={closeDeleteDialog}
+        onConfirm={handleDeleteConversation}
+        title={deleteDialog.title}
+        isDeleting={isDeleting}
       />
     </>
   )
