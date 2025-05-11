@@ -8,9 +8,10 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
-from app.models.animation import AnimationRequest, AnimationResponse, QualityOption, AnimationHistoryResponse
+from app.models.animation import AnimationRequest, AnimationResponse, QualityOption, AnimationHistoryResponse, AnimationStatusResponse
 from app.services.manim_service import generate_animation_from_query
 from app.services.conversation_service import get_conversation_with_animations, create_conversation
+from app.services.animation_service import get_animation_status
 
 router = APIRouter(prefix="/api", tags=["animation"])
 
@@ -34,6 +35,9 @@ class AnimationResponse(BaseModel):
     user_id: UUID
     version: int
     created_at: str = None
+    status: str = "pending"
+    progress: float = 0.0
+    status_message: str = None
 
 
 @router.post("/generate-animation", response_model=AnimationResponse)
@@ -100,6 +104,9 @@ async def generate_animation(
         animation = next((a for a in conversation_data["animations"] if str(a["id"]) == str(animation_id)), None)
         version = animation["version"] if animation else 1
         created_at = animation["created_at"] if animation else None
+        status = animation["status"] if animation else "pending"
+        progress = animation["progress"] if animation else 0.0
+        status_message = animation["status_message"] if animation else None
         
         return AnimationResponse(
             id=animation_id,
@@ -109,7 +116,10 @@ async def generate_animation(
             conversation_id=conversation_id,
             user_id=request.user_id,
             version=version,
-            created_at=created_at
+            created_at=created_at,
+            status=status,
+            progress=progress,
+            status_message=status_message
         )
     except HTTPException:
         # Re-raise HTTP exceptions as-is
@@ -166,4 +176,41 @@ async def get_animations(
     return AnimationHistoryResponse(
         animations=animations,
         count=total_count
-    ) 
+    )
+
+
+@router.get("/animation/{animation_id}/status", response_model=AnimationStatusResponse)
+async def get_animation_status_endpoint(
+    animation_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db)
+) -> AnimationStatusResponse:
+    """
+    Get the current status of an animation.
+    
+    Args:
+        animation_id: ID of the animation
+        user_id: ID of the user making the request
+        db: Database session
+        
+    Returns:
+        AnimationStatusResponse: Current status, progress, and status message
+        
+    Raises:
+        HTTPException: If animation not found or user not authorized
+    """
+    try:
+        status_response = await get_animation_status(db, animation_id, user_id)
+        if not status_response:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Animation with ID {animation_id} not found"
+            )
+        return status_response
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting animation status: {str(e)}"
+        ) 

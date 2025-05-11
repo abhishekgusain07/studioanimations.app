@@ -13,9 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.animation import QualityOption
-from app.models.db_models import MessageType
+from app.models.db_models import MessageType, AnimationStatus, Animation
 from app.services.conversation_service import get_or_create_conversation, save_animation
 from app.services.message_service import create_message
+from app.services.animation_service import update_animation_status
 
 logger = structlog.get_logger(__name__)
 
@@ -214,18 +215,78 @@ async def generate_animation_from_query(
                 message_type=MessageType.USER
             )
         
+        # Create animation record with initial status
+        if db and user_id and conversation_id:
+            # Save the animation with initial status
+            animation = await save_animation(
+                db=db,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                query=query,
+                generated_code="", # Will be updated later
+                video_url="",      # Will be updated later
+                quality=quality,
+                success=False,     # Will be updated later
+                error_message=None,
+                status=AnimationStatus.PENDING,
+                progress=0.0,
+                status_message="Initializing animation generation"
+            )
+            animation_id = animation.id
+            await db.flush()
+        
+        # Update status to PROCESSING with initial progress
+        if db and animation_id:
+            await update_animation_status(
+                db=db,
+                animation_id=animation_id,
+                status=AnimationStatus.PROCESSING,
+                progress=10.0,
+                status_message="Generating Manim code"
+            )
+        
         # Generate Manim code from the query
         generated_code = await generate_manim_code_from_llm(query, previous_code)
+        
+        # Update status with progress
+        if db and animation_id:
+            await update_animation_status(
+                db=db,
+                animation_id=animation_id,
+                status=AnimationStatus.PROCESSING,
+                progress=30.0,
+                status_message="Code generated, preparing to render animation"
+            )
         
         # Write the generated code to a file
         script_path = job_dir / "generated_manim_scene.py"
         with open(script_path, "w") as f:
             f.write(generated_code)
         
+        # Update status before running Manim
+        if db and animation_id:
+            await update_animation_status(
+                db=db,
+                animation_id=animation_id,
+                status=AnimationStatus.PROCESSING,
+                progress=40.0,
+                status_message="Starting animation rendering"
+            )
+        
         # Run the Manim script to generate the animation
         success, error_msg = await run_manim_script(script_path, media_dir, quality)
         
         if not success:
+            # Update status to FAILED
+            if db and animation_id:
+                await update_animation_status(
+                    db=db,
+                    animation_id=animation_id,
+                    status=AnimationStatus.FAILED,
+                    progress=0.0,
+                    status_message=f"Animation generation failed: {error_msg}"
+                )
+            
             if db and user_id and conversation_id:
                 # Save error message as AI response if generation failed
                 await create_message(
@@ -235,7 +296,17 @@ async def generate_animation_from_query(
                     content=f"Failed to generate animation: {error_msg}",
                     message_type=MessageType.AI
                 )
-            return False, "", error_msg, None, conversation_id
+            return False, "", error_msg, animation_id, conversation_id
+        
+        # Update status after rendering is complete
+        if db and animation_id:
+            await update_animation_status(
+                db=db,
+                animation_id=animation_id,
+                status=AnimationStatus.PROCESSING,
+                progress=80.0,
+                status_message="Rendering complete, processing video"
+            )
         
         # Find the generated media file
         video_dir = media_dir / "videos" / "GeneratedManimScene"
@@ -244,17 +315,26 @@ async def generate_animation_from_query(
         if not video_files:
             error_msg = "No video output was generated"
             
+            # Update status to FAILED
+            if db and animation_id:
+                await update_animation_status(
+                    db=db,
+                    animation_id=animation_id,
+                    status=AnimationStatus.FAILED,
+                    progress=0.0,
+                    status_message=error_msg
+                )
+                
             if db and user_id and conversation_id:
                 # Save error message as AI response
                 await create_message(
                     db=db,
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    content=error_msg,
+                    content=f"Failed to generate animation: {error_msg}",
                     message_type=MessageType.AI
                 )
-            
-            return False, "", error_msg, None, conversation_id
+            return False, "", error_msg, animation_id, conversation_id
         
         # Get the first video file (should only be one)
         video_path = video_files[0]
@@ -271,18 +351,24 @@ async def generate_animation_from_query(
         # URL path to access the video
         video_url = f"/manim_videos/{target_name}"
         
-        # Save to database if a session is provided
-        if db and user_id and conversation_id:
-            animation = await save_animation(
+        # Update the animation record with success status
+        if db and animation_id:
+            # Update the animation record with complete status
+            await update_animation_status(
                 db=db,
-                conversation_id=conversation_id,
-                user_id=user_id,
-                query=query,
-                generated_code=generated_code,
-                video_url=video_url,
-                quality=quality
+                animation_id=animation_id,
+                status=AnimationStatus.COMPLETED,
+                progress=100.0,
+                status_message="Animation generated successfully"
             )
-            animation_id = animation.id
+            
+            # Update the animation record with generated code and video URL
+            animation = await db.get(Animation, animation_id)
+            if animation:
+                animation.generated_code = generated_code
+                animation.video_url = str(video_url)
+                animation.success = True
+                await db.flush()
             
             # Save AI response with animation ID
             await create_message(

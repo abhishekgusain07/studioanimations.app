@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.db_models import Conversation, Animation, Message
-from app.models.animation import ConversationSidebarResponse, QualityOption
+from app.models.animation import ConversationSidebarResponse, QualityOption, AnimationStatus
 
 
 async def create_conversation(
@@ -128,7 +128,10 @@ async def save_animation(
     video_url: str,
     quality: QualityOption,
     success: bool = True,
-    error_message: Optional[str] = None
+    error_message: Optional[str] = None,
+    status: Optional[AnimationStatus] = None,
+    progress: float = 0.0,
+    status_message: Optional[str] = None
 ) -> Animation:
     """
     Save a generated animation to the database.
@@ -143,6 +146,9 @@ async def save_animation(
         quality: Quality level used for rendering
         success: Whether the animation generation was successful
         error_message: Error message if the generation failed
+        status: Current processing status
+        progress: Current progress percentage (0-100)
+        status_message: Optional status message
         
     Returns:
         Animation: The created animation record
@@ -164,7 +170,10 @@ async def save_animation(
         version=max_version + 1,
         quality=quality,
         success=success,
-        error_message=error_message
+        error_message=error_message,
+        status=status or AnimationStatus.PENDING,
+        progress=progress,
+        status_message=status_message
     )
     
     db.add(animation)
@@ -217,7 +226,10 @@ async def get_conversation_with_animations(
                 "version": anim.version,
                 "quality": anim.quality,
                 "success": anim.success,
-                "created_at": anim.created_at
+                "created_at": anim.created_at,
+                "status": anim.status,
+                "progress": anim.progress,
+                "status_message": anim.status_message
             }
             for anim in sorted(conversation.animations, key=lambda x: x.created_at)
         ]
@@ -272,7 +284,10 @@ async def get_conversation_with_messages_and_animations(
                 "version": anim.version,
                 "quality": anim.quality,
                 "success": anim.success,
-                "created_at": anim.created_at
+                "created_at": anim.created_at,
+                "status": anim.status,
+                "progress": anim.progress,
+                "status_message": anim.status_message
             }
             for anim in sorted(conversation.animations, key=lambda x: x.created_at)
         ],
