@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.animation import QualityOption
+from app.models.db_models import MessageType
 from app.services.conversation_service import get_or_create_conversation, save_animation
+from app.services.message_service import create_message
 
 logger = structlog.get_logger(__name__)
 
@@ -198,132 +200,121 @@ async def generate_animation_from_query(
     media_dir.mkdir(exist_ok=True)
     
     try:
-        # If we have a database session, get or create the conversation
-        conversation = None
+        # Get or create a conversation if a database session is provided
         if db and user_id:
-            conversation = await get_or_create_conversation(
+            conversation = await get_or_create_conversation(db, conversation_id, user_id)
+            conversation_id = conversation.id
+            
+            # Save the user message
+            await create_message(
                 db=db,
                 conversation_id=conversation_id,
-                user_id=user_id
+                user_id=user_id,
+                content=query,
+                message_type=MessageType.USER
             )
-            conversation_id = conversation.id
         
         # Generate Manim code from the query
-        manim_code = await generate_manim_code_from_llm(query, previous_code)
+        generated_code = await generate_manim_code_from_llm(query, previous_code)
         
-        # Save the code to a file
-        script_path = job_dir / "generatedmanimscene_script.py"
+        # Write the generated code to a file
+        script_path = job_dir / "generated_manim_scene.py"
         with open(script_path, "w") as f:
-            f.write(manim_code)
+            f.write(generated_code)
         
-        # Run Manim to generate the animation with the specified quality
+        # Run the Manim script to generate the animation
         success, error_msg = await run_manim_script(script_path, media_dir, quality)
         
         if not success:
-            # If we have a database session, save the failed animation
-            if db and conversation_id and user_id:
-                animation = await save_animation(
+            if db and user_id and conversation_id:
+                # Save error message as AI response if generation failed
+                await create_message(
                     db=db,
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    query=query,
-                    generated_code=manim_code,
-                    video_url="",
-                    quality=quality,
-                    success=False,
-                    error_message=error_msg
+                    content=f"Failed to generate animation: {error_msg}",
+                    message_type=MessageType.AI
                 )
-                animation_id = animation.id
+            return False, "", error_msg, None, conversation_id
+        
+        # Find the generated media file
+        video_dir = media_dir / "videos" / "GeneratedManimScene"
+        video_files = list(video_dir.glob("*.mp4"))
+        
+        if not video_files:
+            error_msg = "No video output was generated"
             
-            return False, "", error_msg, animation_id, conversation_id
-        
-        # Find the generated video file
-        video_file = None
-        for file in (media_dir / "videos" / "generatedmanimscene_script" / "480p15").glob("GeneratedManimScene.mp4"):
-            video_file = file
-            break
-        
-        # In case the exact path pattern doesn't match, try a broader search
-        if video_file is None:
-            for file in media_dir.rglob("GeneratedManimScene.mp4"):
-                video_file = file
-                break
-        
-        if video_file is None:
-            error_msg = "Generated video file not found"
-            # If we have a database session, save the failed animation
-            if db and conversation_id and user_id:
-                animation = await save_animation(
+            if db and user_id and conversation_id:
+                # Save error message as AI response
+                await create_message(
                     db=db,
                     conversation_id=conversation_id,
                     user_id=user_id,
-                    query=query,
-                    generated_code=manim_code,
-                    video_url="",
-                    quality=quality,
-                    success=False,
-                    error_message=error_msg
+                    content=error_msg,
+                    message_type=MessageType.AI
                 )
-                animation_id = animation.id
             
-            return False, "", error_msg, animation_id, conversation_id
+            return False, "", error_msg, None, conversation_id
         
-        # Copy the video to the public directory with a unique name
-        output_filename = f"{job_id}_GeneratedManimScene.mp4"
-        output_path = settings.STATIC_VIDEOS_DIR / output_filename
-        shutil.copy2(video_file, output_path)
+        # Get the first video file (should only be one)
+        video_path = video_files[0]
         
-        # Construct the URL for the video
-        video_url = f"{settings.SERVED_VIDEOS_PATH_PREFIX}/{output_filename}"
+        # Copy to static directory with job ID in the filename
+        static_dir = settings.STATIC_DIR / "manim_videos"
+        static_dir.mkdir(exist_ok=True)
         
-        # If we have a database session, save the successful animation
-        if db and conversation_id and user_id:
+        # Use the job ID in the target filename for uniqueness
+        target_name = f"{job_id}_GeneratedManimScene.mp4"
+        target_path = static_dir / target_name
+        shutil.copy2(video_path, target_path)
+        
+        # URL path to access the video
+        video_url = f"/manim_videos/{target_name}"
+        
+        # Save to database if a session is provided
+        if db and user_id and conversation_id:
             animation = await save_animation(
                 db=db,
                 conversation_id=conversation_id,
                 user_id=user_id,
                 query=query,
-                generated_code=manim_code,
+                generated_code=generated_code,
                 video_url=video_url,
-                quality=quality,
-                success=True
+                quality=quality
             )
             animation_id = animation.id
-        
-        # Clean up temporary files
-        shutil.rmtree(media_dir, ignore_errors=True)
-        script_path.unlink(missing_ok=True)
-        
-        # Try to remove the job directory if it's empty
-        try:
-            job_dir.rmdir()
-        except OSError:
-            # Directory not empty, that's ok
-            pass
+            
+            # Save AI response with animation ID
+            await create_message(
+                db=db,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                content="Animation generated successfully",
+                message_type=MessageType.AI,
+                animation_id=animation_id
+            )
         
         return True, video_url, "", animation_id, conversation_id
-        
+    
     except Exception as e:
         logger.exception("Error generating animation", error=str(e))
-        # Clean up in case of error
-        shutil.rmtree(job_dir, ignore_errors=True)
         
-        # If we have a database session, save the failed animation
-        if db and conversation_id and user_id:
+        if db and user_id and conversation_id:
+            # Save error message as AI response
+            await create_message(
+                db=db,
+                conversation_id=conversation_id,
+                user_id=user_id,
+                content=f"Error generating animation: {str(e)}",
+                message_type=MessageType.AI
+            )
+            
+        return False, "", f"Error generating animation: {str(e)}", None, conversation_id
+    
+    finally:
+        # Clean up temporary files (keep the static video file)
+        if settings.CLEANUP_TEMP_FILES and job_dir.exists():
             try:
-                animation = await save_animation(
-                    db=db,
-                    conversation_id=conversation_id,
-                    user_id=user_id,
-                    query=query,
-                    generated_code=previous_code or "",
-                    video_url="",
-                    quality=quality,
-                    success=False,
-                    error_message=str(e)
-                )
-                animation_id = animation.id
-            except Exception as db_error:
-                logger.exception("Error saving failed animation to database", error=str(db_error))
-        
-        return False, "", f"Error generating animation: {str(e)}", animation_id, conversation_id 
+                shutil.rmtree(job_dir)
+            except Exception as e:
+                logger.warning("Failed to clean up temporary files", error=str(e)) 

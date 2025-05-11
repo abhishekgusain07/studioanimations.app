@@ -204,10 +204,12 @@ export function AppSidebar() {
                                   e.stopPropagation()
                                   openRenameDialog(conv.id, conv.title)
                                 }}
+                                asChild
                               >
                                 <Edit className="h-3 w-3" />
                               </Button>
                               <Button 
+                                asChild
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-6 w-6 text-destructive opacity-70 hover:opacity-100"
@@ -274,7 +276,7 @@ export function AppSidebar() {
                 </SidebarGroup>
               )}
               
-            {filteredToday.length === 0 && filteredOlder.length === 0 && (
+          {filteredToday.length === 0 && filteredOlder.length === 0 && (
                 <div className="px-3 py-10 text-center text-muted-foreground">
                   <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No conversations found</p>

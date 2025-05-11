@@ -14,7 +14,9 @@ from app.models.animation import (
     AnimationHistoryResponse,
     CreateConversationRequest,
     ConversationSidebarResponse,
-    RenameConversationRequest
+    RenameConversationRequest,
+    ConversationWithMessages,
+    ConversationWithAnimationsAndMessages
 )
 from app.services.conversation_service import (
     get_user_conversations, 
@@ -22,7 +24,8 @@ from app.services.conversation_service import (
     create_conversation,
     get_conversation_sidebar_data,
     rename_conversation,
-    delete_conversation
+    delete_conversation,
+    get_conversation_with_messages_and_animations
 )
 
 router = APIRouter(prefix="/api", tags=["conversation"])
@@ -245,3 +248,33 @@ async def delete_conversation_route(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete conversation: {str(e)}"
         ) 
+
+
+@router.get("/conversations/{conversation_id}/full", response_model=ConversationWithAnimationsAndMessages)
+async def get_conversation_full(
+    conversation_id: UUID,
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db)
+) -> ConversationWithAnimationsAndMessages:
+    """
+    Get a conversation with all its messages and animations.
+    
+    Args:
+        conversation_id: ID of the conversation to get
+        user_id: ID of the user who owns the conversation
+        db: Database session
+        
+    Returns:
+        ConversationWithAnimationsAndMessages: Conversation with its messages and animations
+        
+    Raises:
+        HTTPException: If the conversation is not found
+    """
+    conversation = await get_conversation_with_messages_and_animations(db, conversation_id, user_id)
+    if not conversation:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Conversation with ID {conversation_id} not found"
+        )
+    
+    return conversation 

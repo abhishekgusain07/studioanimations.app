@@ -1,4 +1,4 @@
-import { pgTable, text, integer, timestamp, boolean, uuid } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, timestamp, boolean, uuid, pgEnum } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 			
 export const user = pgTable("user", {
@@ -119,14 +119,43 @@ export const animation = pgTable("animations", {
 	createdAt: timestamp("created_at").defaultNow().notNull()
 });
 
+// Define message type enum matching the backend
+export const messageTypeEnum = pgEnum('messagetype', ['user', 'ai']);
+
+// Message table matching the backend implementation
+export const message = pgTable("messages", {
+	id: text("id").primaryKey(),
+	conversationId: text("conversation_id")
+		.notNull()
+		.references(() => conversation.id, { onDelete: 'cascade' }),
+	userId: text("user_id").notNull(),
+	content: text("content").notNull(),
+	type: messageTypeEnum("type").notNull(),
+	animationId: text("animation_id")
+		.references(() => animation.id, { onDelete: 'set null' }),
+	createdAt: timestamp("created_at").defaultNow().notNull()
+});
+
 // Define relationships
 export const conversationRelations = relations(conversation, ({ many }) => ({
-	animations: many(animation)
+	animations: many(animation),
+	messages: many(message)
 }));
 
 export const animationRelations = relations(animation, ({ one }) => ({
 	conversation: one(conversation, {
 		fields: [animation.conversationId],
 		references: [conversation.id]
+	})
+}));
+
+export const messageRelations = relations(message, ({ one }) => ({
+	conversation: one(conversation, {
+		fields: [message.conversationId],
+		references: [conversation.id]
+	}),
+	animation: one(animation, {
+		fields: [message.animationId],
+		references: [animation.id]
 	})
 }));

@@ -9,7 +9,7 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.db_models import Conversation, Animation
+from app.models.db_models import Conversation, Animation, Message
 from app.models.animation import ConversationSidebarResponse, QualityOption
 
 
@@ -224,6 +224,72 @@ async def get_conversation_with_animations(
     }
 
 
+async def get_conversation_with_messages_and_animations(
+    db: AsyncSession, 
+    conversation_id: UUID,
+    user_id: UUID
+) -> Optional[Dict[str, Any]]:
+    """
+    Get a conversation with all its messages and animations.
+    
+    Args:
+        db: Database session
+        conversation_id: UUID of the conversation to get
+        user_id: UUID of the user who owns the conversation
+        
+    Returns:
+        Optional[Dict[str, Any]]: The conversation data with messages and animations, or None if not found
+    """
+    query = (
+        select(Conversation)
+        .options(
+            selectinload(Conversation.animations),
+            selectinload(Conversation.messages)
+        )
+        .where(
+            Conversation.id == conversation_id,
+            Conversation.user_id == user_id
+        )
+    )
+    
+    result = await db.execute(query)
+    conversation = result.scalar_one_or_none()
+    
+    if not conversation:
+        return None
+    
+    return {
+        "id": conversation.id,
+        "user_id": conversation.user_id,
+        "title": conversation.title,
+        "created_at": conversation.created_at,
+        "updated_at": conversation.updated_at,
+        "animations": [
+            {
+                "id": anim.id,
+                "query": anim.query,
+                "video_url": anim.video_url,
+                "version": anim.version,
+                "quality": anim.quality,
+                "success": anim.success,
+                "created_at": anim.created_at
+            }
+            for anim in sorted(conversation.animations, key=lambda x: x.created_at)
+        ],
+        "messages": [
+            {
+                "id": msg.id,
+                "conversation_id": msg.conversation_id,
+                "content": msg.content,
+                "type": msg.type,
+                "animation_id": msg.animation_id,
+                "created_at": msg.created_at
+            }
+            for msg in sorted(conversation.messages, key=lambda x: x.created_at)
+        ]
+    }
+
+
 async def get_user_conversations(
     db: AsyncSession, 
     user_id: UUID, 
@@ -288,13 +354,17 @@ async def get_conversation_sidebar_data(
     Returns:
         List of conversation sidebar data
     """
-    # Query conversations with animation count
+    # Query conversations with animation count and message count
     query = select(
         Conversation,
-        func.count(Animation.id).label('animation_count')
+        func.count(Animation.id).label('animation_count'),
+        func.count(Message.id).label('message_count')
     ).outerjoin(
         Animation,
         Animation.conversation_id == Conversation.id
+    ).outerjoin(
+        Message,
+        Message.conversation_id == Conversation.id
     ).where(
         Conversation.user_id == user_id
     ).group_by(
@@ -306,16 +376,38 @@ async def get_conversation_sidebar_data(
     result = await db.execute(query)
     conversations = result.all()
     
-    return [
-        ConversationSidebarResponse(
-            id=conv.id,
-            title=conv.title,
-            last_active=conv.updated_at,
-            preview=conv.preview,
-            animation_count=count
+    # Generate preview text from latest message if available
+    sidebar_data = []
+    for conv, anim_count, msg_count in conversations:
+        # Get latest message for preview
+        preview_query = select(Message).where(
+            Message.conversation_id == conv.id
+        ).order_by(Message.created_at.desc()).limit(1)
+        
+        preview_result = await db.execute(preview_query)
+        latest_message = preview_result.scalar_one_or_none()
+        
+        preview = None
+        if latest_message:
+            # Truncate content to a reasonable length for preview
+            if len(latest_message.content) > 50:
+                preview = latest_message.content[:50] + "..."
+            else:
+                preview = latest_message.content
+        
+        # Add to response data
+        sidebar_data.append(
+            ConversationSidebarResponse(
+                id=conv.id,
+                title=conv.title,
+                last_active=conv.updated_at,
+                preview=preview,
+                animation_count=anim_count,
+                message_count=msg_count
+            )
         )
-        for conv, count in conversations
-    ]
+    
+    return sidebar_data
 
 
 async def rename_conversation(
@@ -383,6 +475,12 @@ async def delete_conversation(
     
     if not conversation:
         return False
+    
+    # Delete all messages in the conversation
+    delete_messages = delete(Message).where(
+        Message.conversation_id == conversation_id
+    )
+    await db.execute(delete_messages)
     
     # Delete all animations in the conversation
     delete_animations = delete(Animation).where(

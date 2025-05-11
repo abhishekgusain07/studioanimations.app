@@ -75,7 +75,7 @@ async def generate_animation(
         else:
             conversation_id = request.conversation_id
 
-        # Generate the animation
+        # Generate the animation - message will be saved by the service
         success, video_url, error_msg, animation_id, conversation_id = await generate_animation_from_query(
             query=request.query,
             quality=request.quality,
