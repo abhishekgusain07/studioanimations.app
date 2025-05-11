@@ -14,7 +14,8 @@ from sqlalchemy import (
     Boolean, 
     Integer,
     func,
-    Enum
+    Enum,
+    Float
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -47,6 +48,14 @@ class Conversation(Base):
         return f"<Conversation(id={self.id}, user_id={self.user_id}, title={self.title})>"
 
 
+class AnimationStatus(str, enum.Enum):
+    """Enum for animation processing status."""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class Animation(Base):
     """Model for storing animation data."""
     __tablename__ = "animations"
@@ -67,6 +76,11 @@ class Animation(Base):
     success = Column(Boolean, default=True)
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Progress tracking
+    status = Column(Enum(AnimationStatus), nullable=False, default=AnimationStatus.PENDING)
+    progress = Column(Float, nullable=False, default=0.0)  # 0.0 to 100.0 percent
+    status_message = Column(Text, nullable=True)
     
     # Relationships
     conversation = relationship("Conversation", back_populates="animations")

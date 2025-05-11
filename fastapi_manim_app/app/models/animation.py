@@ -7,7 +7,7 @@ from typing import List, Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
 
-from app.models.db_models import MessageType
+from app.models.db_models import MessageType, AnimationStatus
 
 
 class QualityOption(str, Enum):
@@ -35,6 +35,18 @@ class AnimationResponse(BaseModel):
     conversation_id: UUID
     user_id: UUID
     version: int
+    created_at: datetime
+    status: AnimationStatus = AnimationStatus.PENDING
+    progress: float = 0.0
+
+
+class AnimationStatusResponse(BaseModel):
+    """Response model for animation status."""
+    id: UUID
+    status: AnimationStatus
+    progress: float  # 0.0 to 100.0
+    status_message: Optional[str] = None
+    video_url: Optional[str] = None
     created_at: datetime
 
 
@@ -91,6 +103,8 @@ class AnimationInConversation(BaseModel):
     quality: str
     success: bool
     created_at: datetime
+    status: AnimationStatus
+    progress: float
 
 
 class ConversationWithAnimations(ConversationResponse):

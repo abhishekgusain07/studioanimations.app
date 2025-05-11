@@ -103,6 +103,9 @@ export const conversation = pgTable("conversations", {
 	updatedAt: timestamp("updated_at").defaultNow().notNull()
 });
 
+// Define animation status enum matching the backend
+export const animationStatusEnum = pgEnum('animationstatus', ['pending', 'processing', 'completed', 'failed']);
+
 export const animation = pgTable("animations", {
 	id: text("id").primaryKey(),
 	conversationId: text("conversation_id")
@@ -116,7 +119,11 @@ export const animation = pgTable("animations", {
 	quality: text("quality").default("low").notNull(),
 	success: boolean("success").default(true).notNull(),
 	errorMessage: text("error_message"),
-	createdAt: timestamp("created_at").defaultNow().notNull()
+	createdAt: timestamp("created_at").defaultNow().notNull(),
+	// Progress tracking fields
+	status: animationStatusEnum("status").default("pending").notNull(),
+	progress: text("progress").default("0.0").notNull(),  // Using text instead of float
+	statusMessage: text("status_message")
 });
 
 // Define message type enum matching the backend

@@ -43,6 +43,13 @@
       "when": 1746968163654,
       "tag": "0005_talented_night_nurse",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1746970542173,
+      "tag": "0006_organic_scarlet_witch",
+      "breakpoints": true
     }
   ]
 }
